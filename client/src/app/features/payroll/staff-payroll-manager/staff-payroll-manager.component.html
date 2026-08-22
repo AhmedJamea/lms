@@ -1,0 +1,177 @@
+<div class="payroll-container">
+  <!-- Feedback Banners -->
+  <div *ngIf="error()" class="banner error-banner">
+    <span class="icon">⚠️</span>
+    <span class="message">{{ error() }}</span>
+  </div>
+  <div *ngIf="successMessage()" class="banner success-banner">
+    <span class="icon">✓</span>
+    <span class="message">{{ successMessage() }}</span>
+  </div>
+
+  <header class="payroll-header">
+    <h1>Staff Payroll Manager</h1>
+    <p class="subtitle">Configure staff base salaries and execute monthly payroll disbursements.</p>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tabs-container">
+    <button [class.active]="activeTab() === 'config'" (click)="setTab('config')" class="tab-btn">
+      <span class="tab-icon">⚙️</span> Salary Configuration
+    </button>
+    <button [class.active]="activeTab() === 'execute'" (click)="setTab('execute')" class="tab-btn">
+      <span class="tab-icon">💸</span> Payroll Execution
+    </button>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div *ngIf="isLoading()" class="loading-overlay">
+    <div class="spinner"></div>
+    <p>Loading payroll data...</p>
+  </div>
+
+  <!-- Tab Content: Salary Configuration -->
+  <div *ngIf="activeTab() === 'config'" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        <h2>Active Staff Salaries</h2>
+        <span class="badge count-badge">{{ staffSalaries().length }} Staff Members</span>
+      </div>
+      
+      <div class="table-wrapper">
+        <table class="payroll-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Base Salary</th>
+              <th>Last Updated</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let staff of staffSalaries()">
+              <td class="font-semibold">{{ staff.name }}</td>
+              <td>
+                <span class="role-badge" [ngClass]="staff.role.toLowerCase()">
+                  {{ staff.role }}
+                </span>
+              </td>
+              <td>
+                <div *ngIf="editingUserId() === staff.user_id; else displaySalary" class="inline-edit-form">
+                  <span class="currency-prefix">$</span>
+                  <input 
+                    type="number" 
+                    [(ngModel)]="editSalaryAmount" 
+                    class="salary-input"
+                    placeholder="Enter salary"
+                    min="1"
+                  />
+                </div>
+                <ng-template #displaySalary>
+                  <span class="salary-amount" *ngIf="staff.base_salary !== null">
+                    ${{ staff.base_salary | number:'1.2-2' }}
+                  </span>
+                  <span class="salary-amount unconfigured" *ngIf="staff.base_salary === null">
+                    Not Set
+                  </span>
+                </ng-template>
+              </td>
+              <td class="text-muted text-sm">
+                {{ staff.updated_at ? (staff.updated_at | date:'mediumDate') : 'Never' }}
+              </td>
+              <td class="actions-col">
+                <div *ngIf="editingUserId() === staff.user_id; else actionButtons">
+                  <button (click)="saveSalary(staff.user_id)" class="btn btn-save" title="Save Salary">
+                    Save
+                  </button>
+                  <button (click)="cancelEdit()" class="btn btn-cancel" title="Cancel">
+                    Cancel
+                  </button>
+                </div>
+                <ng-template #actionButtons>
+                  <button (click)="startEdit(staff)" class="btn btn-edit">
+                    {{ staff.base_salary !== null ? 'Edit Salary' : 'Configure' }}
+                  </button>
+                </ng-template>
+              </td>
+            </tr>
+            <tr *ngIf="staffSalaries().length === 0 && !isLoading()">
+              <td colspan="5" class="empty-state">No active staff members found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Payroll Execution -->
+  <div *ngIf="activeTab() === 'execute'" class="tab-content">
+    <div class="card">
+      <div class="execution-controls">
+        <div class="picker-group">
+          <label for="month-picker">Select Payroll Month:</label>
+          <input 
+            id="month-picker" 
+            type="month" 
+            [value]="currentMonth()" 
+            (change)="onMonthChange($event)" 
+            class="month-input"
+          />
+        </div>
+        <span class="badge info-badge">Month: {{ currentMonth() }}</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="payroll-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Base Salary</th>
+              <th>Status</th>
+              <th>Paid On</th>
+              <th class="actions-col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let entry of payrollList()">
+              <td class="font-semibold">{{ entry.name }}</td>
+              <td>
+                <span class="role-badge" [ngClass]="entry.role.toLowerCase()">
+                  {{ entry.role }}
+                </span>
+              </td>
+              <td>
+                <span *ngIf="entry.base_salary !== null">${{ entry.base_salary | number:'1.2-2' }}</span>
+                <span *ngIf="entry.base_salary === null" class="unconfigured">Not Configured</span>
+              </td>
+              <td>
+                <span class="status-badge" [ngClass]="entry.status.toLowerCase()">
+                  {{ entry.status.replace('_', ' ') }}
+                </span>
+              </td>
+              <td class="text-muted text-sm">
+                {{ entry.paid_on ? (entry.paid_on | date:'medium') : '-' }}
+              </td>
+              <td class="actions-col">
+                <button 
+                  *ngIf="entry.status === 'PENDING'" 
+                  (click)="markAsPaid(entry)" 
+                  class="btn btn-pay"
+                >
+                  Mark as Paid
+                </button>
+                <span *ngIf="entry.status === 'PAID'" class="paid-check">✓ Settled</span>
+                <span *ngIf="entry.status === 'NOT_CONFIGURED'" class="text-muted text-xs">Configure salary first</span>
+              </td>
+            </tr>
+            <tr *ngIf="payrollList().length === 0 && !isLoading()">
+              <td colspan="6" class="empty-state">No staff available for payroll in this period.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
